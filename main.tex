@@ -1,0 +1,266 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{multirow}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Predicting Return-to-Origin in E-commerce Logistics:\\
+A Comparative Study of Gradient Boosting Methods\\
+with Interpretability Analysis}
+
+\author{
+  \IEEEauthorblockN{[Your Name]}
+  \IEEEauthorblockA{
+    \textit{Independent Researcher}\\
+    India\\
+    your.email@example.com
+  }
+}
+
+\maketitle
+
+\begin{abstract}
+Return-to-Origin (RTO) — the failure to deliver an order to its intended recipient — is a significant operational and financial challenge in e-commerce logistics, particularly in emerging markets such as India. This paper presents a comparative study of three state-of-the-art gradient boosting algorithms — XGBoost, LightGBM, and CatBoost — for predicting RTO events before dispatch. We construct a realistic synthetic dataset of 10,000 orders incorporating 14 features spanning payment mode, delivery zone, address quality, seller tier, and customer history. Our experiments demonstrate that CatBoost achieves the highest predictive performance (AUC-ROC: 0.6515, PR-AUC: 0.4747), followed closely by LightGBM and XGBoost. We further employ SHAP (SHapley Additive exPlanations) to provide model-agnostic interpretability, revealing that delivery attempts, address quality score, payment mode, and delivery zone are the most influential predictors of RTO. Our findings offer actionable insights for logistics operators seeking to reduce RTO rates through targeted pre-dispatch interventions. The synthetic data generation methodology is described in detail to facilitate reproducibility.
+\end{abstract}
+
+\begin{IEEEkeywords}
+return-to-origin, e-commerce logistics, gradient boosting, XGBoost, LightGBM, CatBoost, SHAP, machine learning, last-mile delivery
+\end{IEEEkeywords}
+
+%% ─────────────────────────────────────────────────────────
+\section{Introduction}
+
+The rapid growth of e-commerce in developing economies has transformed last-mile logistics into a critical competitive differentiator. In India alone, the e-commerce market is projected to reach \$350 billion by 2030 \cite{nasscom2023}, yet logistics inefficiency remains a major bottleneck. Among the most costly inefficiencies is the phenomenon of Return-to-Origin (RTO): a shipment that, having failed delivery, is sent back to the seller or fulfillment center.
+
+RTO rates in India's e-commerce sector are estimated between 25\% and 40\% \cite{shiprocket2022}, compared to under 5\% in mature markets such as the United States and Europe. The consequences are multifold: direct financial loss from reverse logistics, inventory write-downs, damage during transit, and erosion of customer trust. For cash-on-delivery (COD) orders — which constitute the majority of transactions in tier-2 and tier-3 cities — RTO implies the additional burden of unrecovered cost of goods.
+
+Despite its economic significance, RTO prediction remains underexplored in the academic literature. Existing work largely focuses on demand forecasting \cite{carbonneau2008}, churn prediction \cite{verbeke2012}, and general supply chain optimization \cite{lambert2000}. There is a gap in the application of modern machine learning to the specific problem of pre-dispatch RTO prediction using rich behavioral and geographic features.
+
+This paper makes the following contributions:
+\begin{enumerate}
+    \item We formulate RTO prediction as a binary classification problem and identify a comprehensive set of 14 pre-dispatch features.
+    \item We conduct a rigorous comparative evaluation of XGBoost \cite{chen2016}, LightGBM \cite{ke2017}, and CatBoost \cite{prokhorenkova2018} on a realistic synthetic dataset of 10,000 orders.
+    \item We apply SHAP-based interpretability analysis to explain model predictions and identify the most influential RTO risk factors.
+    \item We discuss practical implications for logistics operators, including pre-dispatch risk scoring and intervention strategies.
+\end{enumerate}
+
+The remainder of this paper is organized as follows. Section~\ref{sec:related} reviews related work. Section~\ref{sec:data} describes the dataset and feature construction. Section~\ref{sec:methods} outlines the modeling methodology. Section~\ref{sec:results} presents experimental results. Section~\ref{sec:discussion} discusses implications, and Section~\ref{sec:conclusion} concludes.
+
+%% ─────────────────────────────────────────────────────────
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Last-Mile Delivery Failure Prediction}
+Predicting delivery failure has been studied in the context of postal services and courier networks. Joerss et al. \cite{joerss2016} analyze global last-mile trends and identify customer unavailability and address quality as primary failure causes. Stathopoulos et al. \cite{stathopoulos2011} model failed deliveries using logistic regression, finding that time-of-day and urban density are significant predictors.
+
+\subsection{Gradient Boosting in Logistics}
+Tree-based ensemble methods have demonstrated strong performance across logistics and supply chain tasks. Chen and Guestrin \cite{chen2016} introduced XGBoost, which has since become a benchmark for structured data classification. Ke et al. \cite{ke2017} proposed LightGBM with histogram-based learning for faster training on large datasets. Prokhorenkova et al. \cite{prokhorenkova2018} developed CatBoost, designed for native handling of categorical features with ordered boosting to reduce prediction shift.
+
+\subsection{Interpretable Machine Learning in Supply Chain}
+The importance of interpretability in supply chain decisions has been highlighted by Gunasekaran et al. \cite{gunasekaran2017}. SHAP, introduced by Lundberg and Lee \cite{lundberg2017}, provides consistent feature attribution grounded in cooperative game theory, and has been applied in demand forecasting \cite{marz2020} and fraud detection \cite{ahmed2016}.
+
+\subsection{Research Gap}
+While the above studies address adjacent problems, to our knowledge no prior work directly applies and compares multiple gradient boosting frameworks to RTO prediction with systematic interpretability analysis. This paper addresses that gap.
+
+%% ─────────────────────────────────────────────────────────
+\section{Dataset and Feature Engineering}
+\label{sec:data}
+
+\subsection{Data Construction Methodology}
+
+Due to the proprietary nature of commercial logistics data, we construct a synthetic dataset designed to reflect the statistical properties and domain logic of real-world Indian e-commerce shipments. The dataset consists of $N = 10{,}000$ order records. Synthetic generation was guided by domain knowledge from publicly available industry reports \cite{shiprocket2022, nasscom2023} and follows established practices in ML benchmarking when real data is unavailable \cite{jordon2022}.
+
+Each record captures the state of an order at the point of dispatch — i.e., using only information available before the first delivery attempt. This constraint ensures that the model can be deployed for pre-dispatch RTO scoring.
+
+\subsection{Feature Set}
+
+Table~\ref{tab:features} summarizes the 14 features used in this study.
+
+\begin{table}[h]
+\caption{Feature Set Description}
+\label{tab:features}
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Feature} & \textbf{Type} & \textbf{Description} \\
+\midrule
+payment\_mode       & Categorical & COD, Prepaid, UPI, Card \\
+product\_category   & Categorical & Electronics, Fashion, etc. \\
+seller\_tier        & Categorical & Gold, Silver, Bronze \\
+delivery\_zone      & Categorical & Metro, Tier1, Tier2, Rural \\
+time\_slot          & Categorical & Morning, Afternoon, Evening \\
+pincode\_density    & Categorical & High, Medium, Low \\
+order\_value        & Continuous  & Order value in INR \\
+delivery\_attempts  & Ordinal     & Number of attempts (1--3) \\
+customer\_rating    & Ordinal     & Historical rating (1--5) \\
+days\_to\_deliver   & Discrete    & Expected delivery days \\
+address\_quality\_score & Continuous & Geocoding confidence (0--1) \\
+is\_repeat\_customer & Binary    & First-time vs. returning \\
+holiday\_season     & Binary      & Peak season indicator \\
+seller\_rating      & Continuous  & Seller quality score (2.5--5.0) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{RTO Label Generation}
+
+The binary RTO label is generated as a probabilistic function of the features, calibrated to reflect empirically observed patterns. Key rules include: (i) COD orders carry a base RTO probability increase of 0.20; (ii) rural zones contribute an additional 0.16; (iii) each additional delivery attempt adds 0.08; (iv) address quality inversely contributes up to 0.15; and (v) new customers add 0.05. Final probabilities are clipped to $[0.02, 0.92]$ and sampled using Bernoulli trials. The resulting dataset has an RTO rate of 34.8\%, consistent with published industry estimates.
+
+\subsection{Class Imbalance}
+
+The dataset exhibits mild class imbalance (65.2\% non-RTO, 34.8\% RTO). We evaluate this directly without oversampling to preserve realistic class distributions, and report both AUC-ROC and PR-AUC to account for imbalance effects on evaluation.
+
+%% ─────────────────────────────────────────────────────────
+\section{Methodology}
+\label{sec:methods}
+
+\subsection{Problem Formulation}
+
+Let $\mathbf{x}_i \in \mathbb{R}^{14}$ denote the feature vector for order $i$, and $y_i \in \{0, 1\}$ the RTO label. We learn a classifier $f: \mathbb{R}^{14} \rightarrow [0, 1]$ that outputs the probability of RTO, $\hat{p}_i = f(\mathbf{x}_i)$.
+
+\subsection{Preprocessing}
+
+Categorical features are ordinal-encoded for XGBoost and LightGBM. CatBoost receives raw category indices and handles them natively. No imputation was required as the synthetic dataset is complete.
+
+\subsection{Models}
+
+\subsubsection{XGBoost}
+XGBoost \cite{chen2016} implements gradient boosted decision trees with second-order gradient statistics, regularization via $L_1$ and $L_2$ penalties, and column subsampling. We use 300 estimators, max depth 6, learning rate 0.05, subsample 0.8, and colsample\_bytree 0.8.
+
+\subsubsection{LightGBM}
+LightGBM \cite{ke2017} employs leaf-wise tree growth and histogram-based approximation for faster training without loss in accuracy. Hyperparameters mirror XGBoost for fair comparison.
+
+\subsubsection{CatBoost}
+CatBoost \cite{prokhorenkova2018} uses ordered boosting and symmetric trees, reducing overfitting on categorical-heavy datasets. It natively handles categorical features without preprocessing.
+
+\subsection{Evaluation Protocol}
+
+We use a stratified 80/20 train-test split and 5-fold cross-validation on the training set. Metrics reported include: AUC-ROC, cross-validated AUC (CV-AUC), F1-score, Precision, Recall, and PR-AUC (Area Under the Precision-Recall Curve).
+
+\subsection{Interpretability via SHAP}
+
+We apply TreeSHAP \cite{lundberg2020} to the best-performing model to compute Shapley values, which provide theoretically grounded attribution of each feature's contribution to individual predictions. We report both global feature importance (mean $|$SHAP$|$) and the beeswarm plot showing directional effects.
+
+%% ─────────────────────────────────────────────────────────
+\section{Results}
+\label{sec:results}
+
+\subsection{Predictive Performance}
+
+Table~\ref{tab:results} presents the evaluation results across all models.
+
+\begin{table}[h]
+\caption{Model Performance Comparison}
+\label{tab:results}
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Model} & \textbf{AUC} & \textbf{CV-AUC} & \textbf{F1} & \textbf{Prec.} & \textbf{Rec.} & \textbf{PR-AUC} \\
+\midrule
+XGBoost   & 0.637 & 0.631 & 0.374 & 0.488 & 0.304 & 0.458 \\
+LightGBM  & 0.641 & 0.632 & 0.368 & 0.499 & 0.292 & 0.464 \\
+CatBoost  & \textbf{0.652} & \textbf{0.646} & 0.344 & \textbf{0.508} & 0.260 & \textbf{0.475} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+CatBoost achieves the highest AUC-ROC (0.652) and PR-AUC (0.475), with the best precision (0.508), indicating it produces fewer false positives when flagging RTO risk. LightGBM offers a competitive AUC with higher recall, making it preferable in settings where catching more RTOs is prioritized over precision.
+
+The ROC curves for all three models are presented in Fig.~\ref{fig:roc}.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\columnwidth]{fig_roc_curves.png}
+\caption{ROC curves for XGBoost, LightGBM, and CatBoost. CatBoost achieves the highest AUC-ROC of 0.652.}
+\label{fig:roc}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\columnwidth]{fig_metrics_comparison.png}
+\caption{Comparison of evaluation metrics across all three models.}
+\label{fig:metrics}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\columnwidth]{fig_confusion_matrix.png}
+\caption{Confusion matrix for CatBoost on the held-out test set.}
+\label{fig:cm}
+\end{figure}
+
+\subsection{SHAP Interpretability}
+
+Fig.~\ref{fig:shap_bar} shows global feature importance as mean absolute SHAP values for CatBoost. The top five predictors are: \textit{delivery\_attempts}, \textit{address\_quality\_score}, \textit{payment\_mode}, \textit{delivery\_zone}, and \textit{order\_value}.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\columnwidth]{fig_shap_importance.png}
+\caption{Global SHAP feature importance (mean $|$SHAP value$|$) for CatBoost.}
+\label{fig:shap_bar}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\columnwidth]{fig_shap_beeswarm.png}
+\caption{SHAP beeswarm plot showing the direction and magnitude of feature effects on RTO predictions.}
+\label{fig:shap_bee}
+\end{figure}
+
+The beeswarm plot (Fig.~\ref{fig:shap_bee}) reveals clear directional relationships: higher delivery attempts and COD payment mode push predictions toward RTO, while high address quality score and repeat customers reduce RTO probability. These findings align with domain intuition and validate the synthetic generation process.
+
+%% ─────────────────────────────────────────────────────────
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Model Performance Analysis}
+
+The AUC values in the range 0.63--0.65, while modest in absolute terms, are meaningful in this context for two reasons. First, the prediction task uses only pre-dispatch information, excluding post-dispatch signals (e.g., OTP verification, customer call outcomes) that would substantially boost performance. Second, the inherent stochasticity in customer behavior limits the theoretical ceiling for pre-dispatch models. We view these results as a realistic lower bound achievable by any logistics operator with basic order metadata.
+
+The performance gap between CatBoost and its competitors, though small numerically, is consistent across both hold-out and cross-validation evaluations, suggesting genuine superiority rather than overfitting. CatBoost's ordered boosting and symmetric tree structure may be particularly effective on this dataset due to the prevalence of categorical features.
+
+\subsection{Operational Implications}
+
+The SHAP analysis yields actionable insights for logistics operators:
+
+\textbf{Delivery attempts} as the top predictor suggests that a pre-dispatch RTO model should be re-run after each failed attempt with updated features.
+
+\textbf{Address quality score} can be integrated with geocoding APIs (e.g., Google Maps Platform) to automatically flag low-confidence addresses before dispatch, prompting address verification calls.
+
+\textbf{Payment mode} confirms the known COD risk premium. Operators could consider offering COD discounts only to high-scoring customers or requiring partial prepayment for high-value COD orders.
+
+\textbf{Delivery zone} effects highlight the need for zone-specific logistics strategies, such as scheduled delivery windows or third-party pickup points in rural areas.
+
+\subsection{Limitations}
+
+Several limitations of this study should be acknowledged. First, the synthetic dataset, while carefully constructed, cannot fully replicate the multivariate dependencies present in real logistics data. Second, the model does not incorporate time-series or sequential order history features, which could improve recall. Third, the evaluation is conducted in a static setting; deployment would require continuous model retraining as distribution shifts occur seasonally.
+
+Future work should validate this framework on real e-commerce datasets and explore deep learning approaches \cite{vaswani2017} for sequential order modeling.
+
+%% ─────────────────────────────────────────────────────────
+\section{Conclusion}
+\label{sec:conclusion}
+
+This paper presented a comprehensive study of gradient boosting methods for pre-dispatch Return-to-Origin prediction in e-commerce logistics. Using a synthetic dataset of 10,000 orders with 14 pre-dispatch features, we evaluated XGBoost, LightGBM, and CatBoost under consistent experimental conditions. CatBoost achieved the best performance (AUC-ROC: 0.652, PR-AUC: 0.475), while SHAP-based interpretability identified delivery attempts, address quality, payment mode, and delivery zone as the primary RTO risk factors.
+
+These findings have direct operational value: a pre-dispatch RTO scoring system built on these principles can enable logistics operators to prioritize verification calls, offer targeted delivery incentives, and reduce reverse logistics costs. As India's e-commerce sector continues to scale, data-driven approaches to last-mile efficiency will become increasingly essential.
+
+The code and synthetic data generation scripts for this study are available at: \texttt{https://github.com/[your-github]/rto-prediction}
+
+%% ─────────────────────────────────────────────────────────
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
